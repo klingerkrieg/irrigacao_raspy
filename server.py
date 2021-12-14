@@ -5,25 +5,15 @@ import threading
 import requests
 import logging
 import traceback
+from os import path
 
-HISTORY_LOG = 'history.log'
+HISTORY_JSON = "history.json"
+
 INFO_LOG = 'info.log'
-
-def setup_logger(name, log_file, level=logging.INFO):
-    formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
-
-    handler = logging.FileHandler(log_file)        
-    handler.setFormatter(formatter)
-
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.addHandler(handler)
-
-    return logger
-
-
-info_log    = setup_logger("info_log", INFO_LOG)
-history_log = setup_logger("history_log", HISTORY_LOG)
+logging.basicConfig(filename=INFO_LOG, 
+            format='%(asctime)s %(levelname)-8s %(message)s',
+            level=logging.INFO,
+            datefmt='%Y-%m-%d %H:%M:%S')
 
 
 IRR_RUNNING  = "irrigando"
@@ -36,17 +26,39 @@ with open('config.json', 'r') as f:
 
 def write_json():
     with open('config.json', 'w') as f:
-        info_log.debug("Configurações modificadas:"+ str(config))
+        logging.debug("Configurações modificadas:"+ str(config))
         json.dump(config,f)
 
 
+def add_history(msg):
+    
+    if path.exists(HISTORY_JSON) == False:
+        with open(HISTORY_JSON, 'w') as f:
+            f.write("{}")
+            f.close()
 
+    with open(HISTORY_JSON, 'r') as f:
+        hist = json.load(f)
+        f.close()
+    with open(HISTORY_JSON, 'w') as f:
+        hist_hour = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
+        print(hist_hour)
+        hist[hist_hour] = msg
+        json.dump(hist,f)
+        f.close()
 
 app = Flask(__name__)
 
 @app.route('/')
 def get_conf():
     return config.__str__()
+
+@app.route('/history')
+def history():
+    with open(HISTORY_JSON, 'r') as f:
+        hist = json.load(f)
+        f.close()
+    return hist
 
 @app.route('/get_precipitation')
 def get_next_precipitation():
@@ -65,8 +77,8 @@ def get_next_precipitation():
         write_json()
         return config["next_precipitation"]
     except Exception:
-        info_log.error("Erro ao capturar previsao do tempo")
-        info_log.error(traceback.format_exc())
+        logging.error("Erro ao capturar previsao do tempo")
+        logging.error(traceback.format_exc())
         print("Erro ao capturar previsao do tempo")
         return "false"
 
@@ -185,7 +197,7 @@ def irrigate(valve_id,hour):
     time_obj = datetime.datetime.strptime(hour,"%H:%M:%S")
     valve["remains"] = time_obj.strftime("%H:%M:%S")
     valve["irrigation"] = IRR_WAITING
-    history_log.info("Válvula:"+valve["name"]+" irrigando por:"+valve["remains"])
+    add_history("Válvula:"+valve["name"]+" irrigando por:"+valve["remains"])
     write_json()
     return {valve["name"]:valve["remains"],"irrigation":valve["irrigation"]}
 
@@ -213,7 +225,7 @@ def threadFunc():
 
                 #se o status da irrigacao for diferente de rodando ou cancelado
                 if valve["irrigation"] not in ([IRR_RUNNING, IRR_CANCELED, IRR_FINIHSED]):
-                    info_log.debug("Verificando válvula:"+valve["name"]+" hora programada:" + valve["scheduled_time"])
+                    logging.debug("Verificando válvula:"+valve["name"]+" hora programada:" + valve["scheduled_time"])
                     #compara o horario atual com o da irrigacao
                     now_t = datetime.datetime.strptime(now,"%H:%M:%S")
                     scheduled_t = datetime.datetime.strptime(valve["scheduled_time"],"%H:%M:%S")
@@ -224,13 +236,13 @@ def threadFunc():
                         get_next_precipitation()
                         #se for abaixo do minimo necessario para nao irrigar
                         if float(config["next_precipitation"]) < float(config["precipitation_limit"]):
-                            info_log.info("Válvula:"+valve["name"]+" iniciando, precipitação:"+config["next_precipitation"]+" limite:"+config["precipitation_limit"])
+                            logging.info("Válvula:"+valve["name"]+" iniciando, precipitação:"+config["next_precipitation"]+" limite:"+config["precipitation_limit"])
                             #irriga normalmente
                             valve["remains"] = valve["duration"]
-                            history_log.info("Válvula:"+valve["name"]+" irrigando por:"+valve["remains"])
+                            add_history("Válvula:"+valve["name"]+" irrigando por:"+valve["remains"])
                         else:
-                            info_log.info("Válvula:"+valve["name"]+" cancelada por motivo de chuva.")
-                            history_log.info("Válvula:"+valve["name"]+" cancelada por motivo de chuva.")
+                            logging.info("Válvula:"+valve["name"]+" cancelada por motivo de chuva.")
+                            add_history("Válvula:"+valve["name"]+" cancelada por motivo de chuva.")
                             valve["irrigation"] = IRR_CANCELED
                         write_json()
                 
@@ -238,7 +250,7 @@ def threadFunc():
         for valve in config["valves"]:
             if valve["remains"] != "00:00:00":
                 valve["irrigation"] = IRR_RUNNING
-                info_log.info("Irrigando "+valve["name"]+" "+valve["remains"])
+                logging.info("Irrigando "+valve["name"]+" "+valve["remains"])
                 remains = datetime.datetime.strptime(valve["remains"],"%H:%M:%S")
                 remains = remains - datetime.timedelta(seconds=delay_sec)
                 #se tiver ido abaixo de 00:00:00
@@ -246,7 +258,7 @@ def threadFunc():
                     remains = datetime.time(0,0)
                 valve["remains"] = remains.strftime("%H:%M:%S")
                 if valve["remains"] == "00:00:00":
-                    info_log.info(valve["name"]+" finalizado.")
+                    logging.info(valve["name"]+" finalizado.")
                     valve["irrigation"] = IRR_FINIHSED
                     print("Finalizado")
                 write_json()
@@ -255,7 +267,8 @@ def threadFunc():
 
 if __name__ == '__main__':    
     th = threading.Thread(target=threadFunc,daemon=True)
-    info_log.info("Thread started")
+    logging.info("Thread started")
     th.start()
-    info_log.info("Flask started")
+    add_history("Turn on")
+    logging.info("Flask started")
     app.run(host='localhost', port=8080)
