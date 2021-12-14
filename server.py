@@ -2,6 +2,7 @@ from flask import Flask
 import json
 import datetime, time
 import threading
+import flask
 import requests
 import logging
 import traceback
@@ -29,8 +30,15 @@ def write_json():
         logging.debug("Configurações modificadas:"+ str(config))
         json.dump(config,f)
 
+#criar o config.json automaticamente
 
-def add_history(msg):
+#cadastrar e deletar valvulas
+
+#permitir cancelar no meio de uma irrigacao (Acho que ja permite)
+
+#colocar mais informacoes, como previsao do tempo
+#cancelamentos
+def add_history(msg, valve={"remains":None,"scheduled_time":None}):
     
     if path.exists(HISTORY_JSON) == False:
         with open(HISTORY_JSON, 'w') as f:
@@ -40,10 +48,17 @@ def add_history(msg):
     with open(HISTORY_JSON, 'r') as f:
         hist = json.load(f)
         f.close()
+
     with open(HISTORY_JSON, 'w') as f:
-        hist_hour = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
-        print(hist_hour)
-        hist[hist_hour] = msg
+        id = len(hist)
+        hour = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        hist[id] = {"msg":msg,
+                    "hour":hour,
+                    "precipitation_today": config["precipitation_today"], 
+                    "next_precipitation": config["next_precipitation"],
+                    "remains":valve["remains"],
+                    "scheduled_time":valve["scheduled_time"]}
         json.dump(hist,f)
         f.close()
 
@@ -51,7 +66,11 @@ app = Flask(__name__)
 
 @app.route('/')
 def get_conf():
-    return config.__str__()
+    #set headers json
+    response = flask.Response()
+    response.content_type = "application/json"
+    response.data = config.__str__()
+    return response
 
 @app.route('/history')
 def history():
@@ -197,7 +216,6 @@ def irrigate(valve_id,hour):
     time_obj = datetime.datetime.strptime(hour,"%H:%M:%S")
     valve["remains"] = time_obj.strftime("%H:%M:%S")
     valve["irrigation"] = IRR_WAITING
-    add_history("Válvula:"+valve["name"]+" irrigando por:"+valve["remains"])
     write_json()
     return {valve["name"]:valve["remains"],"irrigation":valve["irrigation"]}
 
@@ -239,28 +257,34 @@ def threadFunc():
                             logging.info("Válvula:"+valve["name"]+" iniciando, precipitação:"+config["next_precipitation"]+" limite:"+config["precipitation_limit"])
                             #irriga normalmente
                             valve["remains"] = valve["duration"]
-                            add_history("Válvula:"+valve["name"]+" irrigando por:"+valve["remains"])
                         else:
                             logging.info("Válvula:"+valve["name"]+" cancelada por motivo de chuva.")
-                            add_history("Válvula:"+valve["name"]+" cancelada por motivo de chuva.")
                             valve["irrigation"] = IRR_CANCELED
                         write_json()
                 
         time.sleep(delay_sec)
         for valve in config["valves"]:
             if valve["remains"] != "00:00:00":
+                #inicia a irrigacao
+                if valve["irrigation"] != IRR_RUNNING:
+                    add_history("Start irrigation",valve)
+
                 valve["irrigation"] = IRR_RUNNING
                 logging.info("Irrigando "+valve["name"]+" "+valve["remains"])
                 remains = datetime.datetime.strptime(valve["remains"],"%H:%M:%S")
                 remains = remains - datetime.timedelta(seconds=delay_sec)
+
                 #se tiver ido abaixo de 00:00:00
                 if remains.day == 31:
                     remains = datetime.time(0,0)
                 valve["remains"] = remains.strftime("%H:%M:%S")
+
+                #para a irrigacao
                 if valve["remains"] == "00:00:00":
                     logging.info(valve["name"]+" finalizado.")
+                    add_history("Stop irrigation",valve)
+                    print("Stop irrigation")
                     valve["irrigation"] = IRR_FINIHSED
-                    print("Finalizado")
                 write_json()
                 break
 
