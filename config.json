@@ -1,0 +1,1 @@
+{"scheduled_time": "09:28:00", "next_precipitation": "0.40", "precipitation_limit": "2.0", "valves": [{"duration": "00:00:20", "name": "atras", "gpio": 2, "remains": "00:00:00"}, {"duration": "00:00:15", "name": "Frente", "gpio": "1", "remains": "00:00:00"}]}
