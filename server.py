@@ -8,6 +8,20 @@ import traceback
 from config import *
 from history import *
 from constants import *
+import os
+
+PRODUCTION = False
+
+#use o seguinte comando no serv de producao
+# export FLASK_ENV=production
+if os.environ.get("FLASK_ENV") == "production":
+    PRODUCTION = True
+
+if PRODUCTION:
+    import RPi.GPIO as GPIO
+    GPIO.setmode(GPIO.BCM)
+    print("GPIO active.")
+
 
 INFO_LOG = 'info.log'
 logging.basicConfig(filename=INFO_LOG, 
@@ -199,9 +213,16 @@ def irrigate(valve_id,hour):
 
 def start_valve(gpio):
     print ("starting:",gpio)
+    if PRODUCTION: 
+        #to work with 5v
+        GPIO.setup(gpio, GPIO.OUT)
+        #GPIO.output(gpio, 0)
 
 def stop_valve(gpio):
     print ("stop:",gpio)
+    if PRODUCTION:
+        GPIO.setup(gpio, GPIO.IN)
+        #GPIO.output(gpio, 1)
 
 
 def threadFunc():
@@ -294,10 +315,27 @@ def threadFunc():
                 break
 
 
-if __name__ == '__main__':    
-    th = threading.Thread(target=threadFunc,daemon=True)
-    logging.info("Thread started")
-    th.start()
-    add_history("Turn on",config)
-    logging.info("Flask started")
-    app.run(host='localhost', port=8080)
+if __name__ == '__main__':
+    try:
+        th = threading.Thread(target=threadFunc,daemon=True)
+        logging.info("Thread started")
+        th.start()
+        add_history("Turn on",config)
+        logging.info("Flask started")
+
+        while True:
+            try:
+                if PRODUCTION:
+                    print('Running on 192.168.0.28')
+                    app.run(host='192.168.0.28', port=8080)
+                else:
+                    print('Running on localhost')
+                    app.run(host='localhost', port=8080)
+            except:
+                logging.info("Wait network connection")
+                time.sleep(5)
+
+    except (KeyboardInterrupt):
+        if PRODUCTION:
+            print("Limpando GPIO")
+            GPIO.cleanup()
