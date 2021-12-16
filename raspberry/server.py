@@ -214,6 +214,7 @@ def irrigate(valve_id,hour):
 def start_valve(gpio):
     print ("starting:",gpio)
     if PRODUCTION: 
+        logging.info("GPIO"+str(gpio)+"=OUT")
         #to work with 5v
         GPIO.setup(gpio, GPIO.OUT)
         #GPIO.output(gpio, 0)
@@ -221,6 +222,7 @@ def start_valve(gpio):
 def stop_valve(gpio):
     print ("stop:",gpio)
     if PRODUCTION:
+        logging.info("GPIO"+str(gpio)+"=IN")
         GPIO.setup(gpio, GPIO.IN)
         #GPIO.output(gpio, 1)
 
@@ -233,10 +235,10 @@ def threadFunc():
         #quando mudar de dia
         if config["last_day"] != datetime.datetime.now().strftime("%d/%m/%Y"):
             config["last_day"] = datetime.datetime.now().strftime("%d/%m/%Y")
-            #reativa tudo que foi cancelado ou finalizado
+            #reativa tudo
             for valve in config["valves"]:
-                if valve["irrigation"] in [IRR_CANCELED,IRR_FINIHSED]:
-                    valve["irrigation"] = IRR_WAITING
+                #if valve["irrigation"] in [IRR_CANCELED,IRR_FINIHSED,IRR_FINIHSED]:
+                valve["irrigation"] = IRR_WAITING
             write_json(config)
 
 
@@ -255,7 +257,6 @@ def threadFunc():
                     scheduled_t = datetime.datetime.strptime(valve["scheduled_time"],"%H:%M:%S")
 
                     if (now_t.strftime("%H:%M") == scheduled_t.strftime("%H:%M")):
-                        valve["irrigation"] = IRR_RUNNING
                         #verifica a chuva nas proximas horas
                         get_precipitation()
                         #se for abaixo do minimo necessario para nao irrigar
