@@ -5,6 +5,9 @@ import { View, ScrollView, SafeAreaView,
 import DateTimePicker from '@react-native-community/datetimepicker';
 var data = require("./Data")
 
+// yarn add react-navigation react-native-gesture-handler react-native-safe-area-context react-native-screens
+// yarn add yarn add react-navigation-stack @react-native-community/masked-view @react-native-community/datetimepicker
+
 
 const styles = StyleSheet.create({
     container: {
@@ -78,7 +81,7 @@ const ListItem = (props) => {
             .then(resText => resText.replace(/'/g, '"'))
             .then(resJson => {
                 console.log(resJson)
-                ToastAndroid.show(resJson, ToastAndroid.SHORT);
+                //ToastAndroid.show(resJson, ToastAndroid.SHORT);
                 data.configData = JSON.parse(resJson)
                 this.setState({ data: data.configData });
                 this.setState({ refreshing: false });
@@ -94,7 +97,7 @@ const ListItem = (props) => {
 
 
     activateTimer(){
-        this.interval = setInterval(() => { this.fetchConf() }, 5000);
+        this.interval = setInterval(() => { this.fetchConf() }, 20000);
     }
 
     componentDidMount() {

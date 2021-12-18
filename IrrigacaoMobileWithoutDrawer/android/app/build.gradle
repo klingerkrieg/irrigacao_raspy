@@ -78,7 +78,7 @@ import com.android.build.OutputFile
  */
 
 project.ext.react = [
-    enableHermes: true,  // clean and rebuild if changing
+    enableHermes: false,  // clean and rebuild if changing
 ]
 
 apply from: "../../node_modules/react-native/react.gradle"
@@ -131,7 +131,7 @@ android {
     compileSdkVersion rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        applicationId "com.irrigacaomobile"
+        applicationId "com.irrigacaomobilewithoutdrawer"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -198,19 +198,8 @@ android {
     }
 }
 
-android {
-    packagingOptions {
-        pickFirst '**/libjsc.so'
-        pickFirst '**/libc++_shared.so'
-    }
-}
-
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
-
-    implementation 'com.android.support:appcompat-v7:28.0.0'
-    implementation "org.webkit:android-jsc:+"
-    
     //noinspection GradleDynamicVersion
     implementation "com.facebook.react:react-native:+"  // From node_modules
 
@@ -229,7 +218,6 @@ dependencies {
         exclude group:'com.facebook.flipper'
     }
 
-    
     if (enableHermes) {
         def hermesPath = "../../node_modules/hermes-engine/android/";
         debugImplementation files(hermesPath + "hermes-debug.aar")

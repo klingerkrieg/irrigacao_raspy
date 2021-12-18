@@ -1,11 +1,11 @@
-from os import path
+from os import path, read
 import json
 from constants import *
 
 CONFIG_JSON = "config.json"
 
-def initialize_json():
-    if path.exists(CONFIG_JSON) == False:
+def initialize_json(force=False):
+    if path.exists(CONFIG_JSON) == False or force:
         with open(CONFIG_JSON, 'w') as f:
             config = {"last_day": "",
                     "current_time":"",
@@ -32,8 +32,16 @@ def initialize_json():
 
 def read_json():
     with open(CONFIG_JSON, 'r') as f:
-        config = json.load(f)
-        return config
+        try:
+            config = json.load(f)
+            return config
+        except:
+            txt = f.read()
+            if (txt == ""):
+                initialize_json(True)
+                return read_json()
+            print(CONFIG_JSON,":",)
+            raise Exception
 
 def write_json(config):
     with open(CONFIG_JSON, 'w') as f:

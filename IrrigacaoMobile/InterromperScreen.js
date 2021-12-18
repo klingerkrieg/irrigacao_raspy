@@ -1,16 +1,13 @@
 import * as React from 'react';
 import { Button, View, ToastAndroid } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
-import DateTimePicker from '@react-native-community/datetimepicker';
 var data = require("./Data")
 
-class IrrigacaoScreen extends React.Component {
+class InterromperScreen extends React.Component {
 
     constructor(props) {
       super(props);
       this.state = {
-        showTimer:false,
-        date:new Date(2021,1,1,0,0,0),
         valve:0
       }
     }
@@ -25,27 +22,12 @@ class IrrigacaoScreen extends React.Component {
       item = {label:valves[i].name, value:i}
       items.push(item)
     }
-    console.log(items);
     return items;
   }
 
-  choiseTime(){
-    this.setState({showTimer:true});
-  }
 
-  onChangeTimer(v){
-    if (v.type == "set"){
-      dt = v.nativeEvent.timestamp;
-      console.log(dt);
-      hour = dt.getHours()
-      if (hour < 10){
-        hour = "0"+hour
-      }
-      minute = dt.getMinutes()
-      if (minute < 10){
-        minute = "0"+minute
-      }
-
+  interrupt(){
+    
       var navigation = this.props.navigation;
 
       timer = hour+":"+minute+":00";
@@ -63,7 +45,7 @@ class IrrigacaoScreen extends React.Component {
             }
         }).catch(e => console.log(e));
 
-      }
+    
   }
 
   render(){
@@ -77,18 +59,7 @@ class IrrigacaoScreen extends React.Component {
             items={items}
         />
 
-        <Button onPress={this.choiseTime.bind(this)} title="Irrigar"></Button>
-
-        {this.state.showTimer &&
-        <DateTimePicker
-                    testID="dateTimePicker"
-                    value={this.state.date}
-                    mode="time"
-                    is24Hour={true}
-                    display="spinner"
-                    onChange={this.onChangeTimer.bind(this)}
-                  />
-        }
+        <Button onPress={this.interrupt.bind(this)} title="Interromper"></Button>
 
       </View>
     );

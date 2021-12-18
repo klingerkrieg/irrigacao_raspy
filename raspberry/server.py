@@ -9,6 +9,9 @@ from config import *
 from history import *
 from constants import *
 import os
+import signal
+import sys
+
 
 PRODUCTION = False
 
@@ -88,7 +91,7 @@ def get_precipitation():
         logging.error("Erro ao capturar previsao do tempo")
         logging.error(traceback.format_exc())
         print("Erro ao capturar previsao do tempo")
-        return "false"
+        return {'status':False}
 
 @app.route('/schedule_time_all/<string:hour>', methods=['PUT'])
 def schedule_time_all(hour):
@@ -96,7 +99,7 @@ def schedule_time_all(hour):
         time_obj = datetime.datetime.strptime(hour,"%H:%M:%S")
         valve["scheduled_time"] = time_obj.strftime("%H:%M:%S")
     write_json(config)
-    resp = {}
+    resp = {'status':True}
     for valve in config["valves"]:
         resp[valve["name"]] = valve["scheduled_time"]
     return resp
@@ -106,11 +109,11 @@ def set_schedule_time(valve_id,hour):
     if valve_id < len(config["valves"]):
         valve = config["valves"][valve_id]
     else:
-        return "false"
+        return {'status':False}
     time_obj = datetime.datetime.strptime(hour,"%H:%M:%S")
     valve["scheduled_time"] = time_obj.strftime("%H:%M:%S")
     write_json(config)
-    return {valve["name"]:valve["scheduled_time"]}
+    return {'status':True, valve["name"]:valve["scheduled_time"]}
 
 
 
@@ -122,7 +125,7 @@ def cancel_all(value):
         else:
             valve["irrigation"] = IRR_WAITING
     write_json(config)
-    resp = {}
+    resp = {'status':True}
     for valve in config["valves"]:
         resp[valve["name"]] = valve["irrigation"]
     return resp
@@ -132,37 +135,37 @@ def cancel(valve_id,value):
     if valve_id < len(config["valves"]):
         valve = config["valves"][valve_id]
     else:
-        return "false"
+        return {'status':False}
     if value == 1:
         valve["irrigation"] = IRR_CANCELED
     else:
         valve["irrigation"] = IRR_WAITING
     write_json(config)
-    return {valve["name"]:valve["irrigation"]}
+    return {'status':True,valve["name"]:valve["irrigation"]}
 
 @app.route('/set_duration/<int:valve_id>/<string:hour>', methods=['PUT'])
 def set_duration(valve_id,hour):
     if valve_id < len(config["valves"]):
         valve = config["valves"][valve_id]
     else:
-        return "false"
+        return {'status':False}
     time_obj = datetime.datetime.strptime(hour,"%H:%M:%S")
     valve["duration"] = time_obj.strftime("%H:%M:%S")
     write_json(config)
-    return {valve["name"]:valve["duration"]}
+    return {'status':True,valve["name"]:valve["duration"]}
     
 @app.route('/set_name/<int:valve_id>/<string:name>', methods=['PUT'])
 def set_name(valve_id,name):
     if valve_id < len(config["valves"]):
         valve = config["valves"][valve_id]
     else:
-        return "false"
+        return {'status':False}
     try:
         valve["name"] = name
         write_json(config)
-        return {"id":valve_id, "name":valve["name"]}
+        return {'status':True,"id":valve_id, "name":valve["name"]}
     except:
-        return "false"
+        return {'status':False}
 
 
 @app.route('/set_gpio/<int:valve_id>/<int:gpio>', methods=['PUT'])
@@ -170,13 +173,13 @@ def set_gpio(valve_id,gpio):
     if valve_id < len(config["valves"]):
         valve = config["valves"][valve_id]
     else:
-        return "false"
+        return {'status':False}
     try:
         valve["gpio"] = gpio
         write_json(config)
-        return {valve["name"]:valve["gpio"]}
+        return {'status':True,valve["name"]:valve["gpio"]}
     except:
-        return "false"
+        return {'status':False}
 
 
 
@@ -185,7 +188,7 @@ def set_irrigate(valve_id,mode):
     if valve_id < len(config["valves"]):
         valve = config["valves"][valve_id]
     else:
-        return "false"
+        return {'status':False}
     if mode == "1":
         valve["irrigation"] = IRR_WAITING
     elif mode == "2":
@@ -196,20 +199,20 @@ def set_irrigate(valve_id,mode):
         valve["irrigation"] = IRR_INTERRUPT
     
     write_json(config)
-    return {valve["name"]:valve["irrigation"]}
+    return {'status':True,valve["name"]:valve["irrigation"]}
 
 @app.route('/irrigate/<int:valve_id>/<string:hour>', methods=['PUT'])
 def irrigate(valve_id,hour):
     if valve_id < len(config["valves"]):
         valve = config["valves"][valve_id]
     else:
-        return "false"
+        return {'status':False}
     time_obj = datetime.datetime.strptime(hour,"%H:%M:%S")
     valve["remains"] = time_obj.strftime("%H:%M:%S")
     valve["irrigation"] = IRR_WAITING
     get_precipitation()
     write_json(config)
-    return {valve["name"]:valve["remains"],"irrigation":valve["irrigation"]}
+    return {'status':True,valve["name"]:valve["remains"],"irrigation":valve["irrigation"]}
 
 def start_valve(gpio):
     print ("starting:",gpio)
@@ -317,26 +320,38 @@ def threadFunc():
 
 
 if __name__ == '__main__':
-    try:
-        th = threading.Thread(target=threadFunc,daemon=True)
-        logging.info("Thread started")
-        th.start()
-        add_history("Turn on",config)
-        logging.info("Flask started")
 
-        while True:
-            try:
-                if PRODUCTION:
-                    print('Running on 192.168.0.28')
-                    app.run(host='192.168.0.28', port=8080)
-                else:
-                    print('Running on localhost')
-                    app.run(host='localhost', port=8080)
-            except:
-                logging.info("Wait network connection")
-                time.sleep(5)
-
-    except (KeyboardInterrupt):
+    def sigint_handler(signal, frame):
         if PRODUCTION:
             print("Limpando GPIO")
             GPIO.cleanup()
+        print ("Encerrando, pressione ctrl+c novamente")
+        sys.exit(0)
+    signal.signal(signal.SIGINT, sigint_handler)
+
+
+    
+    th = threading.Thread(target=threadFunc,daemon=True)
+    logging.info("Thread started")
+    th.start()
+    
+        
+    
+    add_history("Turn on",config)
+    logging.info("Flask started")
+
+    
+    while True:
+        try:
+            if PRODUCTION:
+                print('Running on 192.168.0.28')
+                app.run(host='192.168.0.28', port=8080)
+            else:
+                print('Running on 192.168.0.20')
+                app.run(host='192.168.0.20', port=8080)
+        except:
+            logging.info("Wait network connection")
+            time.sleep(5)
+        
+
+    
