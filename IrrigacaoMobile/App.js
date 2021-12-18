@@ -1,8 +1,11 @@
 import * as React from 'react';
-import { Button, View, ScrollView, SafeAreaView, RefreshControl , FlatList, StyleSheet, Text } from 'react-native';
+import { Button, View, ScrollView, SafeAreaView, RefreshControl , ToastAndroid, StyleSheet, Text } from 'react-native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { NavigationContainer } from '@react-navigation/native';
 import RNPickerSelect from 'react-native-picker-select';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
+
 
 const styles = StyleSheet.create({
   container: {
@@ -20,10 +23,12 @@ const styles = StyleSheet.create({
 });
 
 
-var configData = {}
+var ip = "192.168.0.20";
+var configData = undefined
+var listKeys = 0;
 
 const ListItem = (props) => {
-  return <View key="1">
+  return <View >
       <Text style={styles.item} >
       <Text style={{ fontWeight:"bold" }}>{props.label}:</Text>
       {props.value}</Text>
@@ -47,8 +52,7 @@ class HomeScreen extends React.Component {
 
   fetchConf() {
       this.setState({ refreshing: true });
-      console.log("ffff")
-      fetch('http://192.168.0.28:8080/')
+      fetch('http://'+ip+':8080/')
           .then(res => res.text())
           .then(resText => resText.replace(/'/g, '"'))
           .then(resJson => {
@@ -68,6 +72,9 @@ class HomeScreen extends React.Component {
   
     return (
       <SafeAreaView style={styles.container}>
+
+
+
         <ScrollView
           contentContainerStyle={styles.scrollView}
           refreshControl={
@@ -77,18 +84,18 @@ class HomeScreen extends React.Component {
             />
           }>
 
-            <ListItem label="Dia" value={this.state.data.last_day} ></ListItem>
-            <ListItem label="Hora" value={this.state.data.current_time} ></ListItem>
-            <ListItem label="Chuva hoje" value={this.state.data.precipitation_today} ></ListItem>
-            <ListItem label="Chuva nas próximas horas" value={this.state.data.next_precipitation} ></ListItem>
-            <ListItem label="Limite de chuva para ativação" value={this.state.data.precipitation_limit} ></ListItem>
+            <ListItem key={listKeys++} label="Dia" value={this.state.data.last_day} ></ListItem>
+            <ListItem key={listKeys++} label="Hora" value={this.state.data.current_time} ></ListItem>
+            <ListItem key={listKeys++} label="Chuva hoje" value={this.state.data.precipitation_today} ></ListItem>
+            <ListItem key={listKeys++} label="Chuva nas próximas horas" value={this.state.data.next_precipitation} ></ListItem>
+            <ListItem key={listKeys++} label="Limite de chuva para ativação" value={this.state.data.precipitation_limit} ></ListItem>
             
             
 
             {this.state.data.valves != undefined &&
             this.state.data.valves.map(function(valve, i){
                 return (
-                      <View style={styles.valve}>
+                      <View key={listKeys++} style={styles.valve}>
 
                       <ListItem label="Nome" value={valve.name} ></ListItem>
                       <ListItem label="Status" value={valve.irrigation} ></ListItem>
@@ -113,10 +120,17 @@ class IrrigacaoScreen extends React.Component {
 
     constructor(props) {
       super(props);
-    
+      this.state = {
+        showTimer:false,
+        date:new Date(2021,1,1,0,0,0),
+        valve:0
+      }
     }
 
   getItems(){
+    if (configData == undefined){
+      return []
+    }
     valves = configData.valves
     items = []
     for (i = 0; i < valves.length; i++){
@@ -127,6 +141,40 @@ class IrrigacaoScreen extends React.Component {
     return items;
   }
 
+  choiseTime(){
+    this.setState({showTimer:true});
+  }
+
+  onChangeTimer(v){
+    if (v.type == "set"){
+      dt = v.nativeEvent.timestamp;
+      console.log(dt);
+      hour = dt.getHours()
+      if (hour < 10){
+        hour = "0"+hour
+      }
+      minute = dt.getMinutes()
+      if (minute < 10){
+        minute = "0"+minute
+      }
+
+      timer = hour+":"+minute+":00";
+      fetch('http://'+ip+':8080/irrigate/'+this.state.valve+'/'+timer,{
+            method:"PUT"
+        })
+        .then(res => res.text())
+        .then(resText => JSON.parse(resText.replace(/'/g, '"')))
+        .then(resJson => {
+            if (resJson.status == true){
+              ToastAndroid.show("Irrigação iniciada", ToastAndroid.SHORT);
+            } else {
+              ToastAndroid.show("Falha ao iniciar irrigação", ToastAndroid.SHORT);
+            }
+        }).catch(e => console.log(e));
+
+    }
+  }
+
   render(){
     items = this.getItems()
 
@@ -134,11 +182,22 @@ class IrrigacaoScreen extends React.Component {
       <View style={{ flex: 1, alignItems: 'center'}}>
 
         <RNPickerSelect
-            onValueChange={(value) => console.log(value)}
+            onValueChange={(value) => {this.setState({valve:value})} }
             items={items}
         />
 
-        <Button title="Irrigar"></Button>
+        <Button onPress={this.choiseTime.bind(this)} title="Irrigar"></Button>
+
+        {this.state.showTimer &&
+        <DateTimePicker
+                    testID="dateTimePicker"
+                    value={this.state.date}
+                    mode="time"
+                    is24Hour={true}
+                    display="spinner"
+                    onChange={this.onChangeTimer.bind(this)}
+                  />
+        }
 
       </View>
     );
